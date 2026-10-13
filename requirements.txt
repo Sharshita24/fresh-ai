@@ -1,0 +1,15 @@
+fastapi>=0.115
+uvicorn[standard]>=0.30
+SQLAlchemy>=2.0
+psycopg[binary]>=3.2      # only needed when DATABASE_URL points at PostgreSQL
+python-dotenv>=1.0
+python-multipart>=0.0.9   # CSV and image uploads
+httpx>=0.27               # optional outbound webhook + tests
+google-genai>=1.0         # optional: Gemini reasoning + vision (falls back to rules without a key)
+
+# dev / tests
+pytest>=8.0
+
+# optional extras
+# google-cloud-bigquery>=3.25   # enable BigQuery export (BIGQUERY_DATASET)
+# pillow>=10                    # downscale uploaded images before Gemini Vision

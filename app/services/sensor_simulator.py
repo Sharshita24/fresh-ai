@@ -1,41 +1,24 @@
+"""Simulated IoT feed. Readings are relative to each product's storage range, so scenarios stay realistic."""
 
-from app.schemas.sensors import SensorReadingInput
+from app.models import Product
+from app.services.anomaly_engine import TEMP_MARGIN_C
 
-
-# Fixed values make the hackathon demo reproducible.
-# These are illustrative demo thresholds and readings,
-# not validated food-safety limits.
-SCENARIOS = {
-    "NORMAL": {
-        "temperature_c": 4.0,
-        "humidity_percent": 65.0,
-        "ethylene_ppm": 0.8,
-    },
-    "TEMPERATURE_SPIKE": {
-        "temperature_c": 9.5,
-        "humidity_percent": 65.0,
-        "ethylene_ppm": 0.8,
-    },
-    "HUMIDITY_SPIKE": {
-        "temperature_c": 4.0,
-        "humidity_percent": 92.0,
-        "ethylene_ppm": 0.8,
-    },
-    "ETHYLENE_SPIKE": {
-        "temperature_c": 4.0,
-        "humidity_percent": 65.0,
-        "ethylene_ppm": 2.5,
-    },
-}
+SCENARIOS = ("NORMAL", "TEMPERATURE_SPIKE", "HUMIDITY_SPIKE", "ETHYLENE_SPIKE")
 
 
-def simulate_reading(batch_id: str, scenario: str) -> SensorReadingInput:
-    values = SCENARIOS.get(scenario)
-
-    if values is None:
+def scenario_reading(product: Product, baseline_c: float, scenario: str) -> dict:
+    if scenario not in SCENARIOS:
         raise ValueError(f"Unknown scenario: {scenario}")
+    reading = {"temperature_c": baseline_c, "humidity_percent": min(product.humidity_max - 4, 91.0), "ethylene_ppm": 0.4}
+    if scenario == "TEMPERATURE_SPIKE":
+        reading["temperature_c"] = round(product.storage_max_c + TEMP_MARGIN_C + 0.2, 1)
+    elif scenario == "HUMIDITY_SPIKE":
+        reading["humidity_percent"] = min(100.0, product.humidity_max + 3)
+    elif scenario == "ETHYLENE_SPIKE":
+        reading["ethylene_ppm"] = round(product.ethylene_max_ppm + 1.0, 1)
+    return reading
 
-    return SensorReadingInput(
-        batch_id=batch_id,
-        **values,
-    )
+
+def temperature_ramp(start_c: float, peak_c: float, steps: int = 7) -> list[float]:
+    """A chiller warming up over a few minutes, e.g. 4.0 → 7.2 °C."""
+    return [round(start_c + (peak_c - start_c) * (i + 1) / steps, 1) for i in range(steps)]

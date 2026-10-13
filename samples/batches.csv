@@ -1,0 +1,4 @@
+batch_id,sku,store_id,supplier_id,lot_code,harvest_date,received_at,expiry_at,quantity,price,location,sensor_id
+STB-051,strawberry-250g,store-042,sup-nandi,NHF-2613-C2,2026-10-12,2026-10-13T00:30:00+05:30,2026-10-15T20:00:00+05:30,120,180,Chiller C-02 · Aisle 3,SNS-C02
+SPN-131,spinach-baby-200g,store-042,sup-hosur,HG-1013-05,2026-10-12,2026-10-13T00:45:00+05:30,2026-10-16T20:00:00+05:30,60,70,Chiller C-01,SNS-C01
+MLK-201,milk-toned-1l,store-042,sup-nandini,ND-1013-201,2026-10-12,2026-10-13T05:50:00+05:30,2026-10-14T23:59:00+05:30,144,68,Dairy cooler D-2,SNS-D02
