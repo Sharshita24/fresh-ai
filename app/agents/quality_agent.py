@@ -1,71 +1,33 @@
-import json
+"""Quality agent: sensors + vision → how much sellable life is really left."""
 
 from app.schemas.agents import QualityAssessment
-from app.schemas.inventory import InventoryBatch
-from app.schemas.sensors import SensorReading
-from app.services.gemini_agent import call_gemini_json, is_gemini_configured
+from app.services.risk import Snapshot
 
 
-def _fallback_assess_quality(
-    batch: InventoryBatch,
-    reading: SensorReading,
-) -> QualityAssessment:
-    flags = reading.anomaly_flags
+def risk_level(score: int) -> str:
+    return "CRITICAL" if score >= 80 else "HIGH" if score >= 60 else "MEDIUM" if score >= 40 else "LOW"
 
-    if "HIGH_TEMPERATURE" in flags:
-        risk = "HIGH"
-        shelf_life = max(
-            0,
-            batch.estimated_remaining_shelf_life_hours - 6,
-        )
-    elif flags:
-        risk = "MEDIUM"
-        shelf_life = max(
-            0,
-            batch.estimated_remaining_shelf_life_hours - 3,
-        )
-    else:
-        risk = "LOW"
-        shelf_life = (
-            batch.estimated_remaining_shelf_life_hours
-        )
 
+def assess_quality(s: Snapshot) -> QualityAssessment:
     evidence = [
-        f"Temperature: {reading.temperature_c} C",
-        f"Humidity: {reading.humidity_percent}%",
-        f"Ethylene: {reading.ethylene_ppm} ppm",
+        f"Temperature {s.temp_c:.1f} °C vs {s.baseline_c:.1f} °C baseline ({s.temp_delta:+.1f} °C)",
+        f"Shelf life {s.hours_left:.0f} h vs {s.shelf.printed_h:.0f} h on the label "
+        f"(temperature ×{s.shelf.temp_factor}, quality ×{s.shelf.quality_factor})",
+        f"Vision: {s.batch.defect_pct:.0f}% surface defects — {s.batch.vision_label}",
     ]
-
-    evidence.extend(
-        f"Detected anomaly: {flag}" for flag in flags
-    )
-
+    evidence += [f"Anomaly: {f}" for f in s.flags]
     return QualityAssessment(
-        batch_id=batch.batch_id,
-        estimated_remaining_shelf_life_hours=shelf_life,
-        risk_level=risk,
+        batch_id=s.batch.batch_id,
+        estimated_remaining_shelf_life_hours=s.hours_left,
+        printed_remaining_hours=s.shelf.printed_h,
+        temperature_c=s.temp_c,
+        baseline_temperature_c=s.baseline_c,
+        temperature_factor=s.shelf.temp_factor,
+        quality_factor=s.shelf.quality_factor,
+        defect_pct=s.batch.defect_pct,
+        vision_label=s.batch.vision_label,
+        anomaly_flags=s.flags,
+        risk_score=s.risk,
+        risk_level=risk_level(s.risk),
         evidence=evidence,
-        confidence=0.80 if flags else 0.65,
     )
-
-
-def assess_quality(
-    batch: InventoryBatch,
-    reading: SensorReading,
-) -> QualityAssessment:
-    if is_gemini_configured():
-        prompt = (
-            "You are a food quality assessment agent. "
-            "Return valid JSON with keys: batch_id, estimated_remaining_shelf_life_hours, "
-            "risk_level, evidence, confidence. "
-            f"Data: {json.dumps({'batch': batch.model_dump(mode='json'), 'reading': reading.model_dump(mode='json')}, default=str)}"
-        )
-        payload = call_gemini_json(prompt)
-        if payload:
-            try:
-                payload["batch_id"] = payload.get("batch_id", batch.batch_id)
-                return QualityAssessment.model_validate(payload)
-            except Exception:
-                pass
-
-    return _fallback_assess_quality(batch, reading)

@@ -1,42 +1,21 @@
+"""Database engine and session. SQLite for local demos, PostgreSQL in production."""
 
-import os
+from datetime import datetime, timezone
 
-from dotenv import load_dotenv
 from sqlalchemy import create_engine
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
 
-load_dotenv()
+from app.config import settings
 
-DATABASE_URL = os.getenv("DATABASE_URL")
-if not DATABASE_URL:
-    raise RuntimeError("DATABASE_URL is missing from .env")
-
-ANALYTICS_DATABASE_URL = os.getenv(
-    "ANALYTICS_DATABASE_URL",
-    DATABASE_URL,
-)
+_is_sqlite = settings.database_url.startswith("sqlite")
 
 engine = create_engine(
-    DATABASE_URL,
-    pool_pre_ping=True,
+    settings.database_url,
+    pool_pre_ping=not _is_sqlite,
+    connect_args={"check_same_thread": False} if _is_sqlite else {},
 )
 
-analytics_engine = create_engine(
-    ANALYTICS_DATABASE_URL,
-    pool_pre_ping=True,
-)
-
-SessionLocal = sessionmaker(
-    bind=engine,
-    autoflush=False,
-    expire_on_commit=False,
-)
-
-AnalyticsSessionLocal = sessionmaker(
-    bind=analytics_engine,
-    autoflush=False,
-    expire_on_commit=False,
-)
+SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
 
 
 class Base(DeclarativeBase):
@@ -51,9 +30,12 @@ def get_db():
         db.close()
 
 
-def get_analytics_db():
-    db = AnalyticsSessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
+def utcnow() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+def as_utc(dt: datetime | None) -> datetime | None:
+    """SQLite returns naive datetimes; treat them as UTC so comparisons work everywhere."""
+    if dt is None:
+        return None
+    return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
